@@ -1,18 +1,17 @@
 // jQuery.XDomainRequest.js
 // Author: Jason Moon - @JSONMOON
 // IE8+
-if (!jQuery.support.cors && jQuery.ajaxTransport && window.XDomainRequest) {
+if (!jQuery.support.cors && window.XDomainRequest) {
   var httpRegEx = /^https?:\/\//i;
   var getOrPostRegEx = /^get|post$/i;
   var sameSchemeRegEx = new RegExp('^'+location.protocol, 'i');
-  var htmlRegEx = /text\/html/i;
   var jsonRegEx = /\/json/i;
   var xmlRegEx = /\/xml/i;
   
   // ajaxTransport exists in jQuery 1.5+
   jQuery.ajaxTransport('text html xml json', function(options, userOptions, jqXHR){
     // XDomainRequests must be: asynchronous, GET or POST methods, HTTP or HTTPS protocol, and same scheme as calling page
-    if (options.crossDomain && options.async && getOrPostRegEx.test(options.type) && httpRegEx.test(options.url) && sameSchemeRegEx.test(options.url)) {
+    if (options.crossDomain && options.async && getOrPostRegEx.test(options.type) && httpRegEx.test(userOptions.url) && sameSchemeRegEx.test(userOptions.url)) {
       var xdr = null;
       var userType = (userOptions.dataType||'').toLowerCase();
       return {
@@ -33,18 +32,21 @@ if (!jQuery.support.cors && jQuery.ajaxTransport && window.XDomainRequest) {
             var responses = {
               text: xdr.responseText
             };
+            /*
+            if (userType === 'html') {
+              responses.html = xdr.responseText;
+            } else
+            */
             try {
-              if (userType === 'html' || htmlRegEx.test(xdr.contentType)) {
-                responses.html = xdr.responseText;
-              } else if (userType === 'json' || (userType !== 'text' && jsonRegEx.test(xdr.contentType))) {
+              if ((userType === 'json') || ((userType !== 'text') && jsonRegEx.test(xdr.contentType))) {
                 try {
-                  responses.json = jQuery.parseJSON(xdr.responseText);
+                  responses.json = $.parseJSON(xdr.responseText);
                 } catch(e) {
                   status.code = 500;
                   status.message = 'parseerror';
                   //throw 'Invalid JSON: ' + xdr.responseText;
                 }
-              } else if (userType === 'xml' || (userType !== 'text' && xmlRegEx.test(xdr.contentType))) {
+              } else if ((userType === 'xml') || ((userType !== 'text') && xmlRegEx.test(xdr.contentType))) {
                 var doc = new ActiveXObject('Microsoft.XMLDOM');
                 doc.async = false;
                 try {
@@ -65,19 +67,20 @@ if (!jQuery.support.cors && jQuery.ajaxTransport && window.XDomainRequest) {
               complete(status.code, status.message, responses, allResponseHeaders);
             }
           };
-          // set an empty handler for 'onprogress' so requests don't get aborted
-          xdr.onprogress = function(){};
           xdr.onerror = function(){
             complete(500, 'error', {
               text: xdr.responseText
             });
           };
-          var postData = '';
-          if (userOptions.data) {
-            postData = (jQuery.type(userOptions.data) === 'string') ? userOptions.data : jQuery.param(userOptions.data);
+          var postData = userOptions.data;
+          if (typeof postData !== 'string') {
+            postData = JSON.stringify(postData);
           }
           xdr.open(options.type, options.url);
-          xdr.send(postData);
+          // Yeah, this bit of code is baffling, see here: http://www.cypressnorth.com/blog/web-programming-and-development/internet-explorer-aborting-ajax-requests-fixed/
+          setTimeout(function(){
+            xdr.send(postData);
+          }, 0);
         },
         abort: function(){
           if (xdr) {
